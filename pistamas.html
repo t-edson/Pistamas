@@ -2,7 +2,6 @@
 <html>
   <head>
     <script src="./jaws/jaws-dynamic.js"></script>
-    <!--link type="text/css" rel="stylesheet" href="style.css" /-->
     <title>Pistamas game</title>
   </head>
 <body>
@@ -10,12 +9,6 @@
     <canvas width=640 height=400></canvas>
     <br>
     FPS: <span id="fps"></span> 
-    <!--div id="info">
-      <h1>Game states</h1>
-      A gamestate is just an normal javascript object with the methods setup(), update() and draw().    
-      In this example we make 2 Constructors: <code>PlayState()</code> and <code>MenuState()</code>.
-      <br />We switch active game state with: <code>jaws.switchGameState(a_game_state_or_function)</code>
-    </div-->
     <h3>jaws log</h3>
     <div id="jaws-log"></div>
 
@@ -458,7 +451,7 @@
         this.y = y
         this.draw = function() {
           this.y -= 4
-          jaws.context.drawImage(jaws.assets.get("bullet.png"), this.x, this.y)
+          jaws.context.drawImage(jaws.assets.get("bala.png"), this.x, this.y)
         }
       }
     }
@@ -489,9 +482,9 @@
     // Código inicial
     window.onload = function() {
         jaws.assets.add("car.png")
-        jaws.assets.add("car2.png")
+        jaws.assets.add("car2.png") 
         jaws.assets.add("car3.png")
-        jaws.assets.add("bullet.png")
+        jaws.assets.add("bala.png")
         jaws.assets.add("pasto.png")
         jaws.assets.add("pista1.png")
         jaws.assets.add("pista2.png")
