@@ -1,0 +1,513 @@
+<!DOCTYPE html> 
+<html>
+  <head>
+    <script src="./jaws/jaws-dynamic.js"></script>
+    <!--link type="text/css" rel="stylesheet" href="style.css" /-->
+    <title>Pistamas game</title>
+  </head>
+<body>
+    <!--canvas style="width: 640px; height: 480px;"></canvas-->
+    <canvas width=640 height=400></canvas>
+    <br>
+    FPS: <span id="fps"></span> 
+    <!--div id="info">
+      <h1>Game states</h1>
+      A gamestate is just an normal javascript object with the methods setup(), update() and draw().    
+      In this example we make 2 Constructors: <code>PlayState()</code> and <code>MenuState()</code>.
+      <br />We switch active game state with: <code>jaws.switchGameState(a_game_state_or_function)</code>
+    </div-->
+    <h3>jaws log</h3>
+    <div id="jaws-log"></div>
+
+    <script>
+    "use strict";
+    //Parte inicial del juego
+    var fps = document.getElementById("fps")
+    function PlayState() {
+        const NUM_ROWS = 22  //Como en la pantalla original del C64
+        const NUM_COLS = 40  //Como en la pantalla original del C64
+        const szoom = 2  //screen scale
+        var pasto1   //fondo 1
+        var pista1   //pista
+        var pista2   //pista con marca
+        var player   //carrito
+        var fuego    //fuego del carrito
+        var bullets = new jaws.SpriteList()
+        var screen = Array(NUM_ROWS);  //filas del fondo
+        var objetos = [];  //Objetos en pantalla en la tierra
+        var tick = 0;
+        var tick2 = 0;
+        var showfire = false
+        var showfire = false
+        var left_pressed = false
+        var right_pressed = false
+        var up_pressed = false
+        var down_pressed = false
+        var state = 0   /* Estado del vehículo
+                            0 -> coche normal 
+                            1 -> choque con tierra
+                            2 -> choque con otro vehículo
+                            3 -> choque con comodín 
+                            4 -> coche destruido
+                        */
+        var delay = 10  //Lentitud del juego
+        var tiempo = 0  //Contador para tiempo
+        var puntaje = 0 //Contador para puntaje
+        /* Arreglo que define el camino de todo el juego. Sus elementos tienen
+        la forma: [definición del camino], Nsecciones
+        Nsecciones, indica cuantas secciones se debe mantener esa forma de la 
+        sección. La definición del camino se define de acuerdo al número de 
+        bloques usados :
+          [bloques tierra, bloques pista1 , bloques tierra, bloques de pista2] */
+        var roadgame = [  
+            [[14, 10,0 , 0], 30],
+            [[15, 8, 0 , 0], 30],
+            [[16, 6, 0 , 0], 30],
+            [[15, 6, 0 , 0], 3],
+            [[14, 6, 0 , 0], 3],
+            [[13, 6, 0 , 0], 3],
+            [[12, 6, 0 , 0], 3],
+            [[13, 6, 0 , 0], 3],
+            [[14, 6, 0 , 0], 30],
+            [[14, 7, 0 , 0], 3],
+            [[14, 8, 0 , 0], 3],
+            [[14, 9, 0 , 0], 3],
+            [[14, 10,0 , 0], 3],
+            [[14, 5, 1 , 5], 3],
+            [[14, 5, 2 , 5], 3],
+            [[14, 5, 3 , 5], 3],
+            [[14, 5, 4 , 5], 30],
+            [[14, 5, 3 , 5], 3],
+            [[14, 5, 2 , 5], 3],
+            [[14, 5, 1 , 5], 3],
+            [[14, 10,0 , 0], 30],
+            [[15, 8 ,0 , 0], 3],
+            [[16, 6 ,0 , 0], 3],
+            [[17, 4 ,0 , 0], 30],
+            [[16, 4 ,0 , 0], 3],
+            [[15, 4 ,0 , 0], 3],
+            [[14, 4 ,0 , 0], 3],
+            [[13, 4 ,0 , 0], 3],
+            [[12, 4 ,0 , 0], 3],
+            [[13, 4 ,0 , 0], 3],
+            [[14, 4 ,0 , 0], 3],
+            [[16, 4 ,0 , 0], 3],
+            [[17, 4 ,0 , 0], 3],
+            [[18, 4 ,0 , 0], 3],
+            [[17, 4 ,0 , 0], 3],
+            [[16, 4 ,0 , 0], 3],
+            [[15, 4 ,0 , 0], 3],
+            [[14, 4 ,0 , 0], 3],
+            [[13, 4 ,0 , 0], 3],
+            [[12, 4 ,0 , 0], 3],
+            [[13, 4 ,0 , 0], 3],
+            [[14, 4 ,0 , 0], 3],
+            [[16, 4 ,0 , 0], 3],
+            [[17, 4 ,0 , 0], 3],
+            [[18, 4 ,0 , 0], 3],
+            [[17, 4 ,0 , 0], 3],
+            [[16, 4 ,0 , 0], 30],
+            [[16, 5 ,0 , 0], 30],
+            [[16, 6 ,0 , 0], 30],
+        ];
+        var cursec = 0  //Índice para accedera a roadgame[]
+        var roadsec = [0,0,0,0]
+        var dursec = 0  //Duración que se debe mantener la sección de camino
+        var durobj = 10  //Duración que se debe mantener un objeto en pantalla
+        var numobj = 0  //Número de objeto agregado
+        
+        this.setup = function() {
+          pasto1 = new jaws.Sprite({image: "pasto.png", x: 10, y:100, scale: szoom})
+          pista1 = new jaws.Sprite({image: "pista1.png", x: 10, y:100, scale: szoom})
+          pista2 = new jaws.Sprite({image: "pista2.png", x: 10, y:100, scale: szoom})
+          player = new jaws.Sprite({image: "car.png", x:320, y:240, scale: szoom})
+          fuego  = new jaws.Sprite({image: "fuego.png", x:320, y:240, scale: szoom})
+            
+          player.can_fire = true
+          jaws.on_keydown("esc",  function() { jaws.switchGameState(MenuState) })
+          jaws.preventDefaultKeys(["up", "down", "left", "right", "space"])
+            //Prepara pantalla inicial. LLenando las filas necesarias
+            var iniSection = [15, 8, 0, 0] 
+            for (var i=0; i<NUM_ROWS; i++) {
+                screen[i] = iniSection;  /*El primer valor indica la coordenada horizontal 
+                donde empieza la pista. El segundo valor indica el ancho de la pista */
+            }
+            //Iniciliza la iteración por roadgame[]
+            cursec = 0
+            roadsec = roadgame[cursec][0] //sección
+            dursec  = roadgame[cursec][1] //duración
+            //Inserta las primeras filas para que la pista aparezca llena con la
+            //primera sección.
+            for (var i=0; i<NUM_ROWS; i++) {
+                AddSection(roadsec)
+            }
+            //Configura texto a mostrar
+            jaws.context.font = "bold 30pt courier";
+        }
+        this.update = function() {
+            tick++;
+            //Genera escenario
+            if (state == 4) return  //Coche destruido
+            if (tick % delay == 0) {  //Agrega sección cada 0.2 seg
+                //Lee la sección actual
+                dursec--
+                if (dursec==0) {
+                    //Se completo la duración
+                    cursec++  //pasa a la siguiente sección
+                    if (cursec>=roadgame.length) {
+                        //LLgeó al límire
+                        cursec--
+                    }
+                    dursec  = roadgame[cursec][1]; //nueva duración
+                } else {
+                    //Lee la sección
+                    roadsec = roadgame[cursec][0] //sección
+                }
+                //Agrega objetos
+                if (durobj==0) {
+                    durobj = 8
+                    //Agrega objetos de tierra
+                    numobj++  //para controlar el objeto
+                    if (numobj % 2 == 0) { 
+                        //Objeto a la izquierda de la pista
+                        AddObjectLeft()
+                    }
+                    if (numobj % 2 == 1) {  
+                        //Objeto a la derecha de la pista
+                        AddObjectRight()
+                        AddBonusRoad()
+                    }
+                } else {
+                    durobj--
+                    //Aprovecha este espacio muerto para
+                    //agregar carritos
+                    if (Math.random()>0.6) {
+                        AddCarsRoad()
+                    }
+                }
+                //Agrega sección
+                AddSection(roadsec)
+            }
+            //Actualiza carro con el  teclado
+            if (tick % 2 == 0) { 
+                KeyProcess( 8 * szoom) 
+            }
+            //Actualiza balas
+            bullets.removeIf(isOutsideCanvas) 
+            fps.innerHTML = jaws.game_loop.fps
+            //Verifica el estado del vehículo
+            var xcar = player.x / 8 / szoom
+            var ycar = player.y / 8 / szoom
+            state = 0
+            var frontsec = screen[ycar-1]  //Sección adelante del carrito
+            if (!InRoad(xcar, frontsec)) {
+                state = 1 
+            }
+            //Define comportamiento de acuerdo al estado
+            if (state == 1 && tick % 15 == 0) {
+                //Verifica si el vehículo chocó con el punto inferior
+                //Ubica fuego
+                fuego.x = player.x
+                fuego.y = player.y - 4
+                //Desplaza carro 
+                player.y += 8 * szoom 
+                if (player.y > NUM_ROWS * 8 * szoom - player.height) {
+                    player.y = NUM_ROWS * 8 * szoom - player.height                    
+                    state = 4;
+                }
+                showfire = true
+            } else {
+                showfire = false
+            }
+            //Verifica colisión
+            objetos.forEach(function(item) {
+                if (item.rect().collideRect(player.rect()) ) {
+                    //Marca bandera para indicar que ha habido choque
+                    player.collision = true
+                    /*Faltaría implementar una mejor respuesta para cuando se 
+                    detecte el choque, además de discriminar si el choque es 
+                    con un comodín de puntos (1, 3 o 5) o con otro carro. */
+                }
+            })
+        }
+        this.draw = function() {
+            jaws.clear()
+            drawBackground()
+            bullets.draw()  
+            if (showfire) fuego.draw()
+            objetos.forEach(function(item) {
+                item.draw()
+            })
+            player.collision ? player.rect().draw() : player.draw()
+            //player.draw()
+            //Dibuja zona inferior de texto
+            jaws.context.fillStyle = "gray"
+            //jaws.context.strokeStyle =  "rgba(200,200,200,0.0)"
+            jaws.context.fillRect(0,NUM_ROWS*16,jaws.width,jaws.height)
+            jaws.context.fillStyle =  "Black"
+            jaws.context.fillText("  Tiempo=" + tiempo + "     Puntos=" + puntaje, 10, NUM_ROWS*16 + 35)
+        }
+        function AddObjectLeft() {
+            if (Math.random() > 0.5) {
+                //Agrega una laguna 
+                //var lago1  = new jaws.Sprite({image: "lago1.png", x:100, y:-50, scale: szoom})
+                //objetos.push(lago1);
+                //var pez    = new jaws.Sprite({image: "pez.png", x:120, y:-40, scale: szoom})
+                //objetos.push(pez);
+                var arbol  = new jaws.Sprite({image: "arbol.png", x:120, y:-50, scale: szoom})
+                objetos.push(arbol);
+            } else {
+                //Agrega otra laguna
+                var lago1  = new jaws.Sprite({image: "lago2.png", x:100, y:-50, scale: szoom})
+                objetos.push(lago1);
+                var pez    = new jaws.Sprite({image: "pez.png", x:120, y:-40, scale: szoom})
+                objetos.push(pez);
+                pez    = new jaws.Sprite({image: "pez.png", x:120, y:-20, scale: szoom})
+                objetos.push(pez);
+            }
+        }
+        function AddObjectRight() {
+            if (Math.random() > 0.5) {
+                var cast1  = new jaws.Sprite({image: "castillo.png", x:450, y:-50, scale: szoom})
+                objetos.push(cast1);
+            } else {
+                var arbol  = new jaws.Sprite({image: "arbol.png", x:450, y:-50, scale: szoom})
+                objetos.push(arbol);
+            }
+        }
+        function AddBonusRoad() {
+            var sec = screen[0]  //Sección donde aparecerá el puntaje
+            var iniRoad = sec[0] * 8 * szoom
+            var widthRoad = Math.abs(sec[1])
+            var xp = iniRoad + Math.round(Math.random() * widthRoad) * 8 * szoom
+            var valueRan = Math.random()
+            if (valueRan > 0.5) {
+                var p = new jaws.Sprite({image: "puntos1.png", x:xp, y:-16, scale: szoom})
+            } else if (valueRan > 0.2) {
+                var p = new jaws.Sprite({image: "puntos3.png", x:xp, y:-16, scale: szoom})
+            } else {  //Menos probable
+                var p = new jaws.Sprite({image: "puntos5.png", x:xp, y:-16, scale: szoom})
+            }
+            
+            objetos.push(p);
+        }
+        function AddCarsRoad() {
+            var sec = screen[0]  //Sección donde aparecerá el puntaje
+            var iniRoad = sec[0] * 8 * szoom
+            var widthRoad = Math.abs(sec[1])
+            var xp = iniRoad + Math.trunc(Math.random() * widthRoad) * 8 * szoom
+            var valueRan = Math.random()
+            if (valueRan > 0.5) {
+                var p = new jaws.Sprite({image: "car2.png", x:xp, y:-16, scale: szoom})
+            } else {  //Menos probable
+                var p = new jaws.Sprite({image: "car3.png", x:xp, y:-16, scale: szoom})
+            }
+            
+            objetos.push(p);
+        }
+        function AddSection(sec0) {
+            const sec = sec0.slice(0)   //creamos copia porque sec0 es una referencia
+            tick2++
+            if (tick2 % 6 == 0) {
+                //Da señal para dibujar la marca de la pista
+                sec[1] = - sec[1]
+                sec[3] = - sec[3]
+            }
+            //Coloca sección al inicio
+            screen.unshift(sec)
+            screen.pop()
+            //Procesa movimiento de objetos en tierra
+            objetos.forEach(function(item) {
+                item.y += 8*szoom
+            })
+            //Quita objeto si se va muy abajo
+            /*Verifica los de índice menor porque fueron los primeros en ingresar
+            y serán los primeros en salir de pantalla. */
+            while (objetos.length>0 && objetos[0].y > (NUM_ROWS-1) * 8 * szoom) {
+                objetos.shift()  //Quita objeto para que ya no se dibuje
+            }
+            //console.log("objetos.length: " + objetos.length)
+        }
+        function KeyProcess(span) {
+            if(!left_pressed  && jaws.pressed("left a"))  { 
+                player.x -= span 
+                if (player.x < 0) {player.x = 0}
+            }
+            if(!right_pressed && jaws.pressed("right d")) { 
+                player.x += span
+                if (player.x > jaws.width - player.width) {
+                    player.x = jaws.width - player.width
+                }
+            }
+            if(!up_pressed    && jaws.pressed("up w"))    { 
+                player.y -= span 
+                if (player.y < 8 * szoom) {player.y = 8 * szoom}
+            }
+            if(!down_pressed  && jaws.pressed("down s"))  { 
+                player.y += span 
+                if (player.y > (NUM_ROWS-1) * 8 * szoom) {
+                    player.y = (NUM_ROWS-1) * 8 * szoom
+                }
+            }
+            if(jaws.pressed("space enter")) {
+                if(player.can_fire) {
+                    bullets.push( new Bullet(player.x+4, player.y) )
+                    player.can_fire = false
+                    setTimeout(function() { player.can_fire = true }, 100)
+                }
+            }
+            //Actualiza variables
+            left_pressed = jaws.pressed("left a");
+            right_pressed = jaws.pressed("right d");
+            up_pressed = jaws.pressed("up w");
+            down_pressed = jaws.pressed("down s");
+            //forceInsideCanvas(player)
+        }
+        function InRoad(xcar, sec) {
+            var ini1 = sec[0]
+            var fin1 = ini1 + Math.abs(sec[1])
+            var ini2 = fin1 + sec[2]
+            var fin2 = ini2 + Math.abs(sec[3])
+            if ( (xcar >= ini1 && xcar < fin1) ||
+                 (xcar >= ini2 && xcar < fin2)
+               )  {
+                return true
+            } else {
+                return false
+            }
+        }
+        function drawBackground() {
+            for (var row=0; row<NUM_ROWS; row++) {
+                //drawRowScreen(row*8*szoom, 19, 2)
+                drawRowScreen(row*8*szoom, screen[row][0], screen[row][1], 
+                                           screen[row][2], screen[row][3])
+            }
+        }
+      function drawRowScreen(y, grass1, road1, grass2, road2) {
+        /* Dibuja una línea de la pantalla considerando que pueden haber hasta
+        2 pistas. "road1"" y "road2"" son el ancho de las pistas.
+        Si el ancho de la pista es negativo, se dibuja la marca blanca de la 
+        pista. */
+        var mark = 0;
+          pasto1.y = y
+          pista1.y = y
+          pista2.y = y
+          var xhor = 0
+          //Dibuja primera zona del pasto
+          for (var i=0; i<grass1; i++) {
+              pasto1.x = xhor
+              pasto1.draw()
+              xhor += 8 * szoom
+          }
+          //Dibuja primera zona de la pista
+          mark = 0;
+          if (road1<0) {road1 = -road1;mark=1;}
+          var road1_2 = Math.floor(road1/2)
+          for (var i=0; i<road1; i++) {
+              if (mark==1 && i == road1_2) {  //pista con marca
+                  pista2.x = xhor
+                  pista2.draw()
+              } else {
+                  pista1.x = xhor
+                  pista1.draw()
+              }
+              xhor += 8 * szoom
+          }
+          //Dibuja segunda zona del pasto
+          for (var i=0; i<grass2; i++) {
+              pasto1.x = xhor
+              pasto1.draw()
+              xhor += 8 * szoom
+          }
+          //Dibuja segunda zona de la pista
+          mark = 0;
+          if (road2<0) {road2 = -road2;mark=1;}
+          var road2_2 = Math.floor(road1/2)
+          for (var i=0; i<road2; i++) {
+              if (mark==1 && i == road2_2) {  //pista con marca
+                  pista2.x = xhor
+                  pista2.draw()
+              } else {
+                  pista1.x = xhor
+                  pista1.draw()
+              }
+              xhor += 8 * szoom
+          }
+          var remain = NUM_COLS - grass1 - road1 - grass2 - road2; 
+          for (var i=0; i<remain; i++) {
+              pasto1.x = xhor
+              pasto1.draw()
+              xhor += 8 * szoom
+          }
+      }
+      function isOutsideCanvas(item) { 
+        return (item.x < 0 || item.y < 0 || item.x > jaws.width || item.y > jaws.height) 
+      }
+      function forceInsideCanvas(item) {
+        if(item.x < 0) 
+            { item.x = 0  }
+        if(item.x + item.width > jaws.width)
+            { item.x = jaws.width - item.width }
+        if(item.y < 0)                  
+            { item.y = 0 }
+        if(item.y + item.height  > jaws.height)  
+            { item.y = jaws.height - item.height }
+      }
+      function Bullet(x, y) {
+        this.x = x
+        this.y = y
+        this.draw = function() {
+          this.y -= 4
+          jaws.context.drawImage(jaws.assets.get("bullet.png"), this.x, this.y)
+        }
+      }
+    }
+    //Menú inicial
+    function MenuState() {
+      var index = 0
+      var items = ["Start", "Settings", "Highscore"]
+
+      this.setup = function() {
+        index = 0
+        jaws.on_keydown(["down","s"],       function()  { index++; if(index >= items.length) {index=items.length-1} } )
+        jaws.on_keydown(["up","w"],         function()  { index--; if(index < 0) {index=0} } )
+        jaws.on_keydown(["enter","space"],  function()  { if(items[index]=="Start") {jaws.switchGameState(PlayState) } } )
+      }
+
+      this.draw = function() {
+        jaws.context.clearRect(0,0,jaws.width,jaws.height)
+        for(var i=0; items[i]; i++) {
+          // jaws.context.translate(0.5, 0.5)
+          jaws.context.font = "bold 50pt terminal";
+          jaws.context.lineWidth = 10
+          jaws.context.fillStyle =  (i == index) ? "Red" : "Black"
+          jaws.context.strokeStyle =  "rgba(200,200,200,0.0)"
+          jaws.context.fillText(items[i], 30, 100 + i * 60)
+        }  
+      }
+    }
+    // Código inicial
+    window.onload = function() {
+        jaws.assets.add("car.png")
+        jaws.assets.add("car2.png")
+        jaws.assets.add("car3.png")
+        jaws.assets.add("bullet.png")
+        jaws.assets.add("pasto.png")
+        jaws.assets.add("pista1.png")
+        jaws.assets.add("pista2.png")
+        jaws.assets.add("fuego.png")
+        jaws.assets.add("lago1.png")
+        jaws.assets.add("lago2.png")
+        jaws.assets.add("castillo.png")
+        jaws.assets.add("pez.png")
+        jaws.assets.add("puntos1.png")
+        jaws.assets.add("puntos3.png")
+        jaws.assets.add("puntos5.png")
+        jaws.assets.add("arbol.png")
+        //jaws.start(MenuState)
+        jaws.start(PlayState, {width: 640, height: 400})  //To go directly to game
+    }
+  </script>
+</body>
+</html>
+
